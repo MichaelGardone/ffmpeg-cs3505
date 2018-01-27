@@ -47,13 +47,13 @@ static int bmp_decode_frame(AVCodecContext *avctx,
     const uint8_t *buf0 = buf;
     GetByteContext gb;
     static int hasBeenLoaded = 0;
-
-    if (hasBeenLoaded == 0) {
-      av_log(avctx, AV_LOG_INFO, "*** CS 3505:  Executing in bmp_decode_frame ***");
-      av_log(avctx, AV_LOG_INFO, "*** CS 3505:  Modified by Michael Gardone and Taku Sakikawa ***");
+    
+    if(hasBeenLoaded==0){
+      av_log(avctx, AV_LOG_INFO, "*** CS 3505:  Executing in bmp_decode_frame *** \n");
+      av_log(avctx, AV_LOG_INFO, "*** CS 3505:  Modified by (Michael Gardone, Taku Sakikawa) *** \n");
       hasBeenLoaded++;
     }
-    
+
     if (buf_size < 14) {
         av_log(avctx, AV_LOG_ERROR, "buf size too small (%d)\n", buf_size);
         return AVERROR_INVALIDDATA;

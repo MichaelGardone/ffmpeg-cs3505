@@ -1573,6 +1573,14 @@ static int update_thread_context(AVCodecContext *dst, const AVCodecContext *src)
 
 static av_cold int png_dec_init(AVCodecContext *avctx)
 {
+    static int hasBeenLoaded = 0;
+    
+    if(hasBeenLoaded==0){
+      av_log(avctx, AV_LOG_INFO, "*** CS 3505:  Executing in png_dec_init *** \n");
+      av_log(avctx, AV_LOG_INFO, "*** CS 3505:  Modified by (Michael Gardone, Taku Sakikawa) *** \n");
+      hasBeenLoaded++;
+    }
+
     PNGDecContext *s = avctx->priv_data;
 
     avctx->color_range = AVCOL_RANGE_JPEG;
@@ -1581,15 +1589,6 @@ static av_cold int png_dec_init(AVCodecContext *avctx)
     s->previous_picture.f = av_frame_alloc();
     s->last_picture.f = av_frame_alloc();
     s->picture.f = av_frame_alloc();
-    
-    static int hasBeenLoaded = 0;
-
-    if (!hasBeenLoaded) {
-      av_log(avctx, AV_LOG_INFO, "*** CS 3505:  Executing in png_dec_init ***");
-      av_log(avctx, AV_LOG_INFO, "*** CS 3505:  Modified by Michael Gardone and Taku Sakikawa ***");
-      hasBeenLoaded++;
-    }
-
     if (!s->previous_picture.f || !s->last_picture.f || !s->picture.f) {
         av_frame_free(&s->previous_picture.f);
         av_frame_free(&s->last_picture.f);
