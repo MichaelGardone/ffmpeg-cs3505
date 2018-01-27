@@ -48,7 +48,7 @@ static int bmp_decode_frame(AVCodecContext *avctx,
     GetByteContext gb;
     static int hasBeenLoaded = 0;
 
-    if (!hasBeenLoaded) {
+    if (hasBeenLoaded == 0) {
       av_log(avctx, AV_LOG_INFO, "*** CS 3505:  Executing in bmp_decode_frame ***");
       av_log(avctx, AV_LOG_INFO, "*** CS 3505:  Modified by Michael Gardone and Taku Sakikawa ***");
       hasBeenLoaded++;
