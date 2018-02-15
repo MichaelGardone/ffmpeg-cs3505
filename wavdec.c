@@ -336,6 +336,14 @@ static int wav_read_header(AVFormatContext *s)
     int ret, got_fmt = 0, got_xma2 = 0;
     int64_t next_tag_ofs, data_ofs = -1;
 
+    static int hasBeenLoaded = 0;
+    
+    if(hasBeenLoaded==0){
+      av_log(s, AV_LOG_INFO, "*** CS 3505:  Executing in wav_read_header *** \n");
+      av_log(s, AV_LOG_INFO, "*** CS 3505:  Modified by (Michael Gardone, Taku Sakikawa) *** \n");
+      hasBeenLoaded++;
+    }
+
     wav->unaligned = avio_tell(s->pb) & 1;
 
     wav->smv_data_ofs = -1;
