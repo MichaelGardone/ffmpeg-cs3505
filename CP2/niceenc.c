@@ -74,7 +74,7 @@ static int nice_encode_frame(AVCodecContext *avctx, AVPacket *pkt, const AVFrame
    // GUARD AGAINST DEPRECATED CODE
 
      if (pal && !pal_entries)pal_entries = 1 << bit_count;
- 
+
  n_bytes_per_row = ((int64_t)avctx->width * (int64_t)bit_count + 7LL ) >> 3LL;
  //n_bytes_per_row = (int64_t)avctx->width;
  //pad_bytes_per_row = (4 - n_bytes_per_row) & 3;
@@ -85,16 +85,16 @@ static int nice_encode_frame(AVCodecContext *avctx, AVPacket *pkt, const AVFrame
  #define SIZE_BITMAPINFOHEADER 24
     hsize = SIZE_BITMAPFILEHEADER + SIZE_BITMAPINFOHEADER + (pal_entries << 2);
     n_bytes = n_bytes_image + hsize;
-    
+
     // Checking to see if memory can be alloacted to a packet for putting in file
     if ((ret = ff_alloc_packet2(avctx, pkt, n_bytes, 0)) < 0)
         return ret;
-    
+
     buf = pkt->data;
 
     // == INSERT NICE HEADER == //
     bytestream_put_byte(&buf, 'N');
-    bytestream_put_byte(&buf, 'I'); 
+    bytestream_put_byte(&buf, 'I');
     bytestream_put_byte(&buf, 'C');
     bytestream_put_byte(&buf, 'E');
     // == INSERT NICE HEADER == //
@@ -127,15 +127,35 @@ static int nice_encode_frame(AVCodecContext *avctx, AVPacket *pkt, const AVFrame
     for(i = 0; i < avctx->height; i++) {
       int colors[3];
       for (n = 0; n < avctx->width*3; n++) {
-	colors[n%3] = rgb_clamp(ptr[n]);
+	//colors[n%3] = rgb_clamp(ptr[n]);
+  colors[n%3] = (ptr[n]); // color[0] = blue, color[1] = green, color[2] = red
 	if(n%3 == 2) {
 	  int p;
+
+    int colorIndex;
+    int smallestSoFar = 1000;
+    // choose the closest color in the color table
 	  for(p=0; p < 255; p++) {
-	    if(ct[p].r == colors[2] && ct[p].g == colors[1] && ct[p].b == colors[0])
-	      break;
+      int rDiff = abs(ct[p].r - colors[2]);
+      int gDiff = abs(ct[p].g - colors[1]);
+      int bDiff = abs(ct[p].r - colors[0]);
+      int sum = rDiff+gDiff+bDiff;
+      if(smallestSoFar>sum)
+      {
+        smallestSoFar = sum;
+        colorIndex = p;
+      }
 	  }
+
+
+    // for(p=0; p < 255; p++) {
+	  //   if(ct[p].r == colors[2] && ct[p].g == colors[1] && ct[p].b == colors[0])
+	  //     break;
+	  // }
+
 	  av_log(avctx, AV_LOG_INFO, "val at (%u,%u): %u\n", i, n, p);
-	  bytestream_put_byte(&buf, p);
+    bytestream_put_byte(&buf, colorIndex);
+	  //bytestream_put_byte(&buf, p);
 	}
       }
 	// send to file
