@@ -46,21 +46,16 @@ static int bmp_decode_frame(AVCodecContext *avctx,
     int dsize;
     const uint8_t *buf0 = buf;
     GetByteContext gb;
-    static int hasBeenLoaded = 0;
-
-    if (!hasBeenLoaded) {
-      av_log(avctx, AV_LOG_INFO, "*** CS 3505:  Executing in bmp_decode_frame ***");
-      av_log(avctx, AV_LOG_INFO, "*** CS 3505:  Modified by Michael Gardone and Taku Sakikawa ***");
-      hasBeenLoaded++;
-    }
     
     if (buf_size < 14) {
         av_log(avctx, AV_LOG_ERROR, "buf size too small (%d)\n", buf_size);
         return AVERROR_INVALIDDATA;
     }
 
-    if (bytestream_get_byte(&buf) != 'B' ||
-        bytestream_get_byte(&buf) != 'M') {
+    if (bytestream_get_byte(&buf) != 'N' ||
+        bytestream_get_byte(&buf) != 'I' ||
+	bytestream_get_byte(&buf) != 'C' ||
+	bytestream_get_byte(&buf) != 'E') {
         av_log(avctx, AV_LOG_ERROR, "bad magic number\n");
         return AVERROR_INVALIDDATA;
     }
@@ -72,11 +67,13 @@ static int bmp_decode_frame(AVCodecContext *avctx,
         fsize = buf_size;
     }
 
-    buf += 2; /* reserved1 */
-    buf += 2; /* reserved2 */
+    //    buf += 2; /* reserved1 */
+    //    buf += 2; /* reserved2 */
 
     hsize  = bytestream_get_le32(&buf); /* header size */
-    ihsize = bytestream_get_le32(&buf); /* more header size */
+    ihsize = hsize; // more header size
+    av_log(avctx, AV_LOG_INFO, "%u\n", ihsize);
+
     if (ihsize + 14LL > hsize) {
         av_log(avctx, AV_LOG_ERROR, "invalid header size %u\n", hsize);
         return AVERROR_INVALIDDATA;
@@ -93,7 +90,11 @@ static int bmp_decode_frame(AVCodecContext *avctx,
         return AVERROR_INVALIDDATA;
     }
 
-    switch (ihsize) {
+    // TODO
+    width = 2;
+    height = 2;
+
+    /*switch (ihsize) {
     case  40: // windib
     case  56: // windib v3
     case  64: // OS/2 v2
@@ -110,16 +111,16 @@ static int bmp_decode_frame(AVCodecContext *avctx,
         avpriv_report_missing_feature(avctx, "Information header size %u",
                                       ihsize);
         return AVERROR_PATCHWELCOME;
-    }
+    }*/
 
     /* planes */
-    if (bytestream_get_le16(&buf) != 1) {
-        av_log(avctx, AV_LOG_ERROR, "invalid BMP header\n");
+    /*if (bytestream_get_le16(&buf) != 1) {
+        av_log(avctx, AV_LOG_ERROR, "invalid NICE header\n");
         return AVERROR_INVALIDDATA;
-    }
+    }*/
 
-    depth = bytestream_get_le16(&buf);
-
+    depth = 8;
+    /*
     if (ihsize >= 40)
         comp = bytestream_get_le32(&buf);
     else
@@ -138,7 +139,7 @@ static int bmp_decode_frame(AVCodecContext *avctx,
         rgb[2] = bytestream_get_le32(&buf);
         if (ihsize > 40)
         alpha = bytestream_get_le32(&buf);
-    }
+	}*/
 
     ret = ff_set_dimensions(avctx, width, height > 0 ? height : -(unsigned)height);
     if (ret < 0) {
@@ -146,64 +147,11 @@ static int bmp_decode_frame(AVCodecContext *avctx,
         return AVERROR_INVALIDDATA;
     }
 
-    avctx->pix_fmt = AV_PIX_FMT_NONE;
+    avctx->pix_fmt = AV_PIX_FMT_BGR24;
 
-    switch (depth) {
-    case 32:
-        if (comp == BMP_BITFIELDS) {
-            if (rgb[0] == 0xFF000000 && rgb[1] == 0x00FF0000 && rgb[2] == 0x0000FF00)
-                avctx->pix_fmt = alpha ? AV_PIX_FMT_ABGR : AV_PIX_FMT_0BGR;
-            else if (rgb[0] == 0x00FF0000 && rgb[1] == 0x0000FF00 && rgb[2] == 0x000000FF)
-                avctx->pix_fmt = alpha ? AV_PIX_FMT_BGRA : AV_PIX_FMT_BGR0;
-            else if (rgb[0] == 0x0000FF00 && rgb[1] == 0x00FF0000 && rgb[2] == 0xFF000000)
-                avctx->pix_fmt = alpha ? AV_PIX_FMT_ARGB : AV_PIX_FMT_0RGB;
-            else if (rgb[0] == 0x000000FF && rgb[1] == 0x0000FF00 && rgb[2] == 0x00FF0000)
-                avctx->pix_fmt = alpha ? AV_PIX_FMT_RGBA : AV_PIX_FMT_RGB0;
-            else {
-                av_log(avctx, AV_LOG_ERROR, "Unknown bitfields "
-                       "%0"PRIX32" %0"PRIX32" %0"PRIX32"\n", rgb[0], rgb[1], rgb[2]);
-                return AVERROR(EINVAL);
-            }
-        } else {
-            avctx->pix_fmt = AV_PIX_FMT_BGRA;
-        }
-        break;
+    /*    switch (depth) {
     case 24:
         avctx->pix_fmt = AV_PIX_FMT_BGR24;
-        break;
-    case 16:
-        if (comp == BMP_RGB)
-            avctx->pix_fmt = AV_PIX_FMT_RGB555;
-        else if (comp == BMP_BITFIELDS) {
-            if (rgb[0] == 0xF800 && rgb[1] == 0x07E0 && rgb[2] == 0x001F)
-               avctx->pix_fmt = AV_PIX_FMT_RGB565;
-            else if (rgb[0] == 0x7C00 && rgb[1] == 0x03E0 && rgb[2] == 0x001F)
-               avctx->pix_fmt = AV_PIX_FMT_RGB555;
-            else if (rgb[0] == 0x0F00 && rgb[1] == 0x00F0 && rgb[2] == 0x000F)
-               avctx->pix_fmt = AV_PIX_FMT_RGB444;
-            else {
-               av_log(avctx, AV_LOG_ERROR,
-                      "Unknown bitfields %0"PRIX32" %0"PRIX32" %0"PRIX32"\n",
-                      rgb[0], rgb[1], rgb[2]);
-               return AVERROR(EINVAL);
-            }
-        }
-        break;
-    case 8:
-        if (hsize - ihsize - 14 > 0)
-            avctx->pix_fmt = AV_PIX_FMT_PAL8;
-        else
-            avctx->pix_fmt = AV_PIX_FMT_GRAY8;
-        break;
-    case 1:
-    case 4:
-        if (hsize - ihsize - 14 > 0) {
-            avctx->pix_fmt = AV_PIX_FMT_PAL8;
-        } else {
-            av_log(avctx, AV_LOG_ERROR, "Unknown palette for %u-colour BMP\n",
-                   1 << depth);
-            return AVERROR_INVALIDDATA;
-        }
         break;
     default:
         av_log(avctx, AV_LOG_ERROR, "depth %u not supported\n", depth);
@@ -213,10 +161,11 @@ static int bmp_decode_frame(AVCodecContext *avctx,
     if (avctx->pix_fmt == AV_PIX_FMT_NONE) {
         av_log(avctx, AV_LOG_ERROR, "unsupported pixel format\n");
         return AVERROR_INVALIDDATA;
-    }
+	}*/
 
     if ((ret = ff_get_buffer(avctx, p, 0)) < 0)
         return ret;
+
     p->pict_type = AV_PICTURE_TYPE_I;
     p->key_frame = 1;
 
@@ -226,7 +175,7 @@ static int bmp_decode_frame(AVCodecContext *avctx,
     /* Line size in file multiple of 4 */
     n = ((avctx->width * depth + 31) / 8) & ~3;
 
-    if (n * avctx->height > dsize && comp != BMP_RLE4 && comp != BMP_RLE8) {
+    if (n * avctx->height > dsize /*&& comp != BMP_RLE4 && comp != BMP_RLE8*/) {
         n = (avctx->width * depth + 7) / 8;
         if (n * avctx->height > dsize) {
             av_log(avctx, AV_LOG_ERROR, "not enough data (%d < %d)\n",
@@ -237,8 +186,8 @@ static int bmp_decode_frame(AVCodecContext *avctx,
     }
 
     // RLE may skip decoding some picture areas, so blank picture before decoding
-    if (comp == BMP_RLE4 || comp == BMP_RLE8)
-        memset(p->data[0], 0, avctx->height * p->linesize[0]);
+    /*    if (comp == BMP_RLE4 || comp == BMP_RLE8)
+	  memset(p->data[0], 0, avctx->height * p->linesize[0]);*/
 
     if (height > 0) {
         ptr      = p->data[0] + (avctx->height - 1) * p->linesize[0];
@@ -247,7 +196,8 @@ static int bmp_decode_frame(AVCodecContext *avctx,
         ptr      = p->data[0];
         linesize = p->linesize[0];
     }
-
+    
+    /*
     if (avctx->pix_fmt == AV_PIX_FMT_PAL8) {
         int colors = 1 << depth;
 
@@ -293,7 +243,7 @@ static int bmp_decode_frame(AVCodecContext *avctx,
             p->data[0]    +=  p->linesize[0] * (avctx->height - 1);
             p->linesize[0] = -p->linesize[0];
         }
-    } else {
+	} else {
         switch (depth) {
         case 1:
             for (i = 0; i < avctx->height; i++) {
@@ -348,7 +298,7 @@ static int bmp_decode_frame(AVCodecContext *avctx,
             av_log(avctx, AV_LOG_ERROR, "BMP decoder is broken\n");
             return AVERROR_INVALIDDATA;
         }
-    }
+    }*/
     if (avctx->pix_fmt == AV_PIX_FMT_BGRA) {
         for (i = 0; i < avctx->height; i++) {
             int j;
@@ -371,7 +321,7 @@ static int bmp_decode_frame(AVCodecContext *avctx,
 
 AVCodec ff_nice_decoder = {
     .name           = "nice",
-    .long_name      = NULL_IF_CONFIG_SMALL("BMP (Windows and OS/2 bitmap)"),
+    .long_name      = NULL_IF_CONFIG_SMALL("Nice"),
     .type           = AVMEDIA_TYPE_VIDEO,
     .id             = AV_CODEC_ID_NICE,
     .decode         = bmp_decode_frame,

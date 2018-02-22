@@ -1,5 +1,5 @@
 /*
- *
+  *
  * This file is part of FFmpeg.
  *
  * FFmpeg is free software; you can redistribute it and/or
@@ -24,11 +24,10 @@
 #include "nice.h"
 #include "internal.h"
 
-static const uint32_t monoblack_pal[] = { 0x000000, 0xFFFFFF };
-static const uint32_t rgb565_masks[]  = { 0xF800, 0x07E0, 0x001F };
-static const uint32_t rgb444_masks[]  = { 0x0F00, 0x00F0, 0x000F };
+static ColorTable ct[256];
 
 static av_cold int nice_encode_init(AVCodecContext *avctx){
+     populate_ColorTable(&ct);
 
      switch (avctx->pix_fmt) {
      case AV_PIX_FMT_BGR24:
@@ -39,7 +38,7 @@ static av_cold int nice_encode_init(AVCodecContext *avctx){
 	 return AVERROR(EINVAL);
      }
 
-     return 0;
+      return 0;
  }
 
 static int nice_encode_frame(AVCodecContext *avctx, AVPacket *pkt, const AVFrame *pict, int *got_packet)
@@ -76,13 +75,14 @@ static int nice_encode_frame(AVCodecContext *avctx, AVPacket *pkt, const AVFrame
 
      if (pal && !pal_entries)pal_entries = 1 << bit_count;
  
-     n_bytes_per_row = ((int64_t)avctx->width * (int64_t)bit_count + 7LL) >> 3LL;
-     pad_bytes_per_row = (4 - n_bytes_per_row) & 3;
+ n_bytes_per_row = ((int64_t)avctx->width * (int64_t)bit_count + 7LL ) >> 3LL;
+ //n_bytes_per_row = (int64_t)avctx->width;
+ //pad_bytes_per_row = (4 - n_bytes_per_row) & 3;
      n_bytes_image = avctx->height * (n_bytes_per_row + pad_bytes_per_row);
 
      // Size of the NICE Header and NICE Info Header(IH)
  #define SIZE_BITMAPFILEHEADER 4
- #define SIZE_BITMAPINFOHEADER 8
+ #define SIZE_BITMAPINFOHEADER 24
     hsize = SIZE_BITMAPFILEHEADER + SIZE_BITMAPINFOHEADER + (pal_entries << 2);
     n_bytes = n_bytes_image + hsize;
     
@@ -111,8 +111,6 @@ static int nice_encode_frame(AVCodecContext *avctx, AVPacket *pkt, const AVFrame
     bytestream_put_le32(&buf, avctx->width);
     bytestream_put_le32(&buf, avctx->height);
     // == INSERT WIDTH AND HEIGHT == //
-    //bytestream_put_le16(&buf, 1);                     // BITMAPINFOHEADER.biPlanes
-    //bytestream_put_le16(&buf, bit_count);             // BITMAPINFOHEADER.biBitCount
     // == SIZE OF PIXEL ARRAY == //
     bytestream_put_le32(&buf, n_bytes_image);
     // == SIZE OF PIXEL ARRAY == //
@@ -124,22 +122,27 @@ static int nice_encode_frame(AVCodecContext *avctx, AVPacket *pkt, const AVFrame
     ptr = p->data[0] + (avctx->height - 1) * p->linesize[0];
     buf = pkt->data + hsize;
 
-    // All encoding an compression goes here
+    // All encoding/compression goes here
     // Loop through height
     for(i = 0; i < avctx->height; i++) {
-        if (bit_count == 16) {
-            const uint16_t *src = (const uint16_t *) ptr;
-            uint16_t *dst = (uint16_t *) buf;
-	    
-	    // Loop through width
-            for(n = 0; n < avctx->width; n++)
-                AV_WL16(dst + n, src[n]);
-        } else {
-            memcpy(buf, ptr, n_bytes_per_row);
-        }
-        buf += n_bytes_per_row;
-        memset(buf, 0, pad_bytes_per_row);
-        buf += pad_bytes_per_row;
+      int colors[3];
+      for (n = 0; n < avctx->width*3; n++) {
+	colors[n%3] = rgb_clamp(ptr[n]);
+	if(n%3 == 2) {
+	  int p;
+	  for(p=0; p < 255; p++) {
+	    if(ct[p].r == colors[2] && ct[p].g == colors[1] && ct[p].b == colors[0])
+	      break;
+	  }
+	  av_log(avctx, AV_LOG_INFO, "val at (%u,%u): %u\n", i, n, p);
+	  bytestream_put_byte(&buf, p);
+	}
+      }
+	// send to file
+        buf += 2;
+        //buf += n_bytes_per_row;
+        //memset(buf, 0, 2);
+        //buf += pad_bytes_per_row;
         ptr -= p->linesize[0]; // ... and go back
     }
 
