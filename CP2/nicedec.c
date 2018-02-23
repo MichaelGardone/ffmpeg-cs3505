@@ -44,6 +44,8 @@ static int bmp_decode_frame(AVCodecContext *avctx,
     uint32_t alpha = 0;
     uint8_t *ptr;
     int dsize;
+
+    int n_bytes_image;
     const uint8_t *buf0 = buf;
     GetByteContext gb;
 
@@ -71,7 +73,7 @@ static int bmp_decode_frame(AVCodecContext *avctx,
     //    buf += 2; /* reserved2 */
 
     hsize  = bytestream_get_le32(&buf); /* header size */
-    ihsize = hsize; // more header size
+    ihsize = bytestream_get_le32(&buf); // more header size
     av_log(avctx, AV_LOG_INFO, "%u\n", ihsize);
 
     if (ihsize + 14LL > hsize) {
@@ -91,8 +93,11 @@ static int bmp_decode_frame(AVCodecContext *avctx,
     }
 
     // TODO
-    width = 2;
-    height = 2;
+    width = bytestream_get_le32(&buf);
+    height = bytestream_get_le32(&buf);
+
+    n_bytes_image = bytestream_get_le32(&buf);
+
 
     /*switch (ihsize) {
     case  40: // windib
@@ -299,20 +304,20 @@ static int bmp_decode_frame(AVCodecContext *avctx,
             return AVERROR_INVALIDDATA;
         }
     }*/
-    if (avctx->pix_fmt == AV_PIX_FMT_BGRA) {
-        for (i = 0; i < avctx->height; i++) {
-            int j;
-            uint8_t *ptr = p->data[0] + p->linesize[0]*i + 3;
-            for (j = 0; j < avctx->width; j++) {
-                if (ptr[4*j])
-                    break;
-            }
-            if (j < avctx->width)
-                break;
-        }
-        if (i == avctx->height)
-            avctx->pix_fmt = p->format = AV_PIX_FMT_BGR0;
-    }
+    // if (avctx->pix_fmt == AV_PIX_FMT_BGRA) {
+    //     for (i = 0; i < avctx->height; i++) {
+    //         int j;
+    //         uint8_t *ptr = p->data[0] + p->linesize[0]*i + 3;
+    //         for (j = 0; j < avctx->width; j++) {
+    //             if (ptr[4*j])
+    //                 break;
+    //         }
+    //         if (j < avctx->width)
+    //             break;
+    //     }
+    //     if (i == avctx->height)
+    //         avctx->pix_fmt = p->format = AV_PIX_FMT_BGR0;
+    // }
 
     *got_frame = 1;
 
