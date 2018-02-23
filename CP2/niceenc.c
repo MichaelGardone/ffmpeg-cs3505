@@ -154,7 +154,7 @@ static int nice_encode_frame(AVCodecContext *avctx, AVPacket *pkt, const AVFrame
 	  //     break;
 	  // }
 
-	  av_log(avctx, AV_LOG_INFO, "val at (%u,%u): %u\n", i, n, p);
+	  //av_log(avctx, AV_LOG_INFO, "val at (%u,%u): %u\n", i, n, p);
     bytestream_put_byte(&buf, colorIndex);
 	}
       }
