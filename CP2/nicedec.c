@@ -129,44 +129,29 @@ static int nice_decode_frame(AVCodecContext *avctx,
 
     if (height > 0) {
         ptr      = p->data[0] + (avctx->height - 1) * p->linesize[0];
-        linesize = -p->linesize[0];
+        linesize = p->linesize[0];
     } else {
         ptr      = p->data[0];
         linesize = p->linesize[0];
     }
     
     // Translation here
-    for (i = 0; i < avctx->height; i++) {
-      //memcpy(ptr, buf, n);
-      
+    int x;
+    for (x = 0; x < avctx->width; x++) {
       int y;
-      int t_storage[3];
-      for(y = 0; y < avctx->width; y++) {
-        // OLD WAY
-	/*t_storage[0] = ptr[y];
-	if(y+1 < avctx->width)
-	  t_storage[1] = ptr[y+1];
-	if(y+2 < avctx->width)
-	  t_storage[2] = ptr[y+2];
-	
-	int r = ct[y].r, g = ct[y].g, b = ct[y].b;
-	memset(ptr[y], b, 4);
-	memset(ptr[y+1], g, 4);
-	memset(ptr[y+2], r, 4);*/
-
-	// NEW WAY
+      for(y = 0; y < avctx->height; y++) {
 	uint8_t t = bytestream_get_byte(&buf);
-	uint8_t bgr[3];
-	bgr[2] = (uint8_t)ct[t].r;
-	bgr[1] = (uint8_t)ct[t].g;
-	bgr[0] = (uint8_t)ct[t].b;
-        uint8_t *buf2;
-	
-	memcpy(ptr, 
+	int bgr[3];
+	bgr[2] = ct[t].r;
+	bgr[1] = ct[t].g;
+	bgr[0] = ct[t].b;
+        
+	int rgb_cnt;
+	for(rgb_cnt = 0; rgb_cnt < 3; rgb_cnt++) {
+	  p->data[0][y*p->linesize[0]+x*3+rgb_cnt] = bgr[rgb_cnt];
+	}
       }
-      
-      buf += n;
-      ptr += linesize;
+      buf += 2;
     }
     // Translation here
 
