@@ -62,7 +62,7 @@ static int nice_encode_frame(AVCodecContext *avctx, AVPacket *pkt, const AVFrame
      int bit_count = avctx->bits_per_coded_sample;
      // *buf - buffer pointer
      // *ptr - points to the end of the file
-     uint8_t *ptr, *buf;
+     uint8_t *ptr, *end_ptr, *buf;
 
      // GUARD AGAINST DEPRECATED CODE
  #if FF_API_CODED_FRAME
@@ -119,7 +119,8 @@ static int nice_encode_frame(AVCodecContext *avctx, AVPacket *pkt, const AVFrame
         bytestream_put_le32(&buf, pal[i] & 0xFFFFFF);
 
     // BMP files are bottom-to-top so we start from the end...
-    ptr = p->data[0] + (avctx->height - 1) * p->linesize[0];
+    end_ptr = p->data[0] + (avctx->height - 1) * p->linesize[0];
+    ptr = p->data[0];
     buf = pkt->data + hsize;
 
     // All encoding/compression goes here
@@ -155,7 +156,6 @@ static int nice_encode_frame(AVCodecContext *avctx, AVPacket *pkt, const AVFrame
 
 	  av_log(avctx, AV_LOG_INFO, "val at (%u,%u): %u\n", i, n, p);
     bytestream_put_byte(&buf, colorIndex);
-	  //bytestream_put_byte(&buf, p);
 	}
       }
 	// send to file
@@ -163,7 +163,8 @@ static int nice_encode_frame(AVCodecContext *avctx, AVPacket *pkt, const AVFrame
         //buf += n_bytes_per_row;
         //memset(buf, 0, 2);
         //buf += pad_bytes_per_row;
-        ptr -= p->linesize[0]; // ... and go back
+	if(end_ptr == ptr)
+	  ptr += p->linesize[0];
     }
 
     pkt->flags |= AV_PKT_FLAG_KEY;
