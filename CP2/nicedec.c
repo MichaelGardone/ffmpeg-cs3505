@@ -1,6 +1,5 @@
 /*
- * BMP image format decoder
- * Copyright (c) 2005 Mans Rullgard
+ * NICE is a file format created for CS3505 Spring 2018 class.
  *
  * This file is part of FFmpeg.
  *
@@ -27,60 +26,71 @@
 #include "internal.h"
 #include "msrledec.h"
 
+/**
+ * nice_decode_frame returns the size of the buffer and will set the AVCodecContext's data up correctly for a .nice file.
+ * Method will return pixels in the BGR24 format. Method expects a .nice file with the correctly labeled header and will
+ * return an error if such a thing is incorrect. As well, the buffer needs to have enough space to convert the .nice to a
+ * computer-readable form.
+ */
 static int nice_decode_frame(AVCodecContext *avctx,
                              void *data, int *got_frame,
                              AVPacket *avpkt)
 {
+    // Color table array
     ColorTable ct[256];
+    // Populate ct with all 256 colors
     populate_ColorTable(&ct);
+    // Our buffer for the data
     const uint8_t *buf = avpkt->data;
+    // The size of the buffer
     int buf_size       = avpkt->size;
+    // Where the pixel data goes
     AVFrame *p         = data;
+    // Dimensions of the picture
     int width, height;
+    // Bit/Channel depth
     unsigned int depth;
-    unsigned int ihsize;
-    int i, j, n, linesize, ret;
-    uint32_t rgb[3] = {0};
-    uint32_t alpha = 0;
-    uint8_t *ptr, *t_ptr;
+    // n -> Linesize
+    // ret -> Used to help initialize avctx width and height
+    int n, ret;
     int dsize;
     
-    int n_bytes_image;
-    const uint8_t *buf0 = buf;
-    GetByteContext gb;
     
+    // Check if buffer size is big enough
     if (buf_size < 14) {
         av_log(avctx, AV_LOG_ERROR, "buf size too small (%d)\n", buf_size);
         return AVERROR_INVALIDDATA;
     }
     
-    if (bytestream_get_byte(&buf) != 'N' ||
-        bytestream_get_byte(&buf) != 'I' ||
-        bytestream_get_byte(&buf) != 'C' ||
-        bytestream_get_byte(&buf) != 'E') {
+    // Check to make sure the first four bytes are correctly in the NICE format
+    if (bytestream_get_byte(&buf) != 'N' || bytestream_get_byte(&buf) != 'I' ||
+        bytestream_get_byte(&buf) != 'C' || bytestream_get_byte(&buf) != 'E') {
         av_log(avctx, AV_LOG_ERROR, "bad magic number\n");
         return AVERROR_INVALIDDATA;
     }
     
-    // Get width, height, and number of bytes in the image
+    // Get width, height
     width = bytestream_get_le32(&buf);
     height = bytestream_get_le32(&buf);
     
-    n_bytes_image = bytestream_get_le32(&buf);
-    
+    // 8 because 8 bits per pixel (or 1 byte)
     depth = 8;
     
+    // Set the avctx width and height dimensions using FFMPEG
     ret = ff_set_dimensions(avctx, width, height > 0 ? height : -(unsigned)height);
     if (ret < 0) {
         av_log(avctx, AV_LOG_ERROR, "Failed to set dimensions %d %d\n", width, height);
         return AVERROR_INVALIDDATA;
     }
     
+    // The video type we are returning
     avctx->pix_fmt = AV_PIX_FMT_BGR24;
     
+    // Check to make sure that the buffer isn't having issues/out of bounds
     if ((ret = ff_get_buffer(avctx, p, 0)) < 0)
         return ret;
     
+    // Putting right settings on pixel information
     p->pict_type = AV_PICTURE_TYPE_I;
     p->key_frame = 1;
     
@@ -99,36 +109,32 @@ static int nice_decode_frame(AVCodecContext *avctx,
         av_log(avctx, AV_LOG_ERROR, "data size too small, assuming missing line alignment\n");
     }
     
-    if (height > 0) {
-        ptr      = p->data[0] + (avctx->height - 1) * p->linesize[0];
-        linesize = p->linesize[0];
-    } else {
-        ptr      = p->data[0];
-        linesize = p->linesize[0];
-    }
-    
     // Translation here
     int y;
     for (y = 0; y < avctx->height; y++) {
         int x;
         for(x = 0; x < avctx->width; x++) {
+	  // Get the next byte in the stream
             uint8_t t = bytestream_get_byte(&buf);
+	    // Get the RGB value in the color table but formatted as BGR
             int bgr[3];
             bgr[2] = ct[t].r;
             bgr[1] = ct[t].g;
             bgr[0] = ct[t].b;
             
             int rgb_cnt;
+	    // Put the BGR value in the picture data
             for(rgb_cnt = 0; rgb_cnt < 3; rgb_cnt++) {
                 p->data[0][y*p->linesize[0]+x*3+rgb_cnt] = bgr[rgb_cnt];
             }
         }
-        //buf += 2;
     }
     // Translation here
     
+    // Success
     *got_frame = 1;
     
+    // Return buffer size
     return buf_size;
 }
 
