@@ -80,11 +80,11 @@ static int nice_encode_frame(AVCodecContext *avctx, AVPacket *pkt, const AVFrame
  //pad_bytes_per_row = (4 - n_bytes_per_row) & 3;
      n_bytes_image = avctx->height * (n_bytes_per_row + pad_bytes_per_row);
      n_bytes_image /=3;
-     n_bytes_image += 2*avctx->height + 10;
+     n_bytes_image += 2*avctx->height;
 
      // Size of the NICE Header and NICE Info Header(IH)
- #define SIZE_BITMAPFILEHEADER 12
- #define SIZE_BITMAPINFOHEADER 16
+ #define SIZE_BITMAPFILEHEADER 4
+ #define SIZE_BITMAPINFOHEADER 12
     hsize = SIZE_BITMAPFILEHEADER + SIZE_BITMAPINFOHEADER + (pal_entries << 2);
     n_bytes = n_bytes_image + hsize;
 
@@ -101,13 +101,13 @@ static int nice_encode_frame(AVCodecContext *avctx, AVPacket *pkt, const AVFrame
     bytestream_put_byte(&buf, 'E');
     // == INSERT NICE HEADER == //
     // == INSERT FILE SIZE == //
-    bytestream_put_le32(&buf, n_bytes);
+    //bytestream_put_le32(&buf, n_bytes);
     // == INSERT FILE SIZE == //
     // == INSERT HEADER SIZE == //
-    bytestream_put_le32(&buf, hsize);
+    //bytestream_put_le32(&buf, hsize);
     // == INSERT HEADER SIZE == //
     // == INSERT IH SIZE == //
-    bytestream_put_le32(&buf, SIZE_BITMAPINFOHEADER);
+    //bytestream_put_le32(&buf, SIZE_BITMAPINFOHEADER);
     // == INSERT IH SIZE == //
     // == INSERT WIDTH AND HEIGHT == //
     bytestream_put_le32(&buf, avctx->width);
@@ -144,7 +144,7 @@ static int nice_encode_frame(AVCodecContext *avctx, AVPacket *pkt, const AVFrame
 	  for(p=0; p < 255; p++) {
       int rDiff = abs(ct[p].r - colors[2]);
       int gDiff = abs(ct[p].g - colors[1]);
-      int bDiff = abs(ct[p].r - colors[0]);
+      int bDiff = abs(ct[p].b - colors[0]);
       int sum = rDiff+gDiff+bDiff;
       if(smallestSoFar>sum)
       {
