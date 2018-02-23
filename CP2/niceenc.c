@@ -173,7 +173,7 @@ static int nice_encode_frame(AVCodecContext *avctx, AVPacket *pkt, const AVFrame
 
 	// send to file
   // memset(buf, 0, 2);
-	buf += 2;
+      //buf += 2;
         //buf += n_bytes_per_row;
         //memset(buf, 0, 2);
         // buf += pad_bytes_per_row;
