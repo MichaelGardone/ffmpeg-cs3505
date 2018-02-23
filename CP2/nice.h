@@ -1,4 +1,5 @@
 /*
+ * NICE is a file format created for CS3505 Spring 2018 class.
  *
  * This file is part of FFmpeg.
  *
@@ -30,7 +31,6 @@ typedef struct {
 } ColorTable;
 
 static void populate_ColorTable(ColorTable (*ct)[]);
-static int rgb_clamp(int val);
 static void colorHelper(ColorTable (*ct)[], int index, int r, int g, int b);
 
 static void colorHelper(ColorTable (*ct)[], int index, int r, int g, int b)
@@ -303,21 +303,5 @@ static void populate_ColorTable(ColorTable (*ct)[])
   colorHelper(ct, 254,228,228,228);
   colorHelper(ct, 255,238,238,238);
 }
-
-/*
- * Clamp the RGB value to a valid RGB value for the color table.
- */
-static int rgb_clamp(int val)
-{
-
-  if(val >= 64 && val < 132)
-    return 128;
-  else if(val >= 132 && val < 205)
-    return 192;
-  else if(val >= 205)
-    return 255;
-  return 0;
-}
-
 
 #endif /* AVCODEC_NICE_H */
