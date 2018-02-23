@@ -23,26 +23,28 @@
 
 #include "avcodec.h"
 #include "bytestream.h"
-#include "bmp.h"
+#include "nice.h"
 #include "internal.h"
 #include "msrledec.h"
 
-static int bmp_decode_frame(AVCodecContext *avctx,
+static int nice_decode_frame(AVCodecContext *avctx,
                             void *data, int *got_frame,
                             AVPacket *avpkt)
 {
+  ColorTable ct[256];
+  populate_ColorTable(&ct);
     const uint8_t *buf = avpkt->data;
     int buf_size       = avpkt->size;
     AVFrame *p         = data;
     unsigned int fsize, hsize;
     int width, height;
     unsigned int depth;
-    BiCompression comp;
+    //BiCompression comp;
     unsigned int ihsize;
     int i, j, n, linesize, ret;
     uint32_t rgb[3] = {0};
     uint32_t alpha = 0;
-    uint8_t *ptr;
+    uint8_t *ptr, *t_ptr;
     int dsize;
 
     int n_bytes_image;
@@ -62,29 +64,22 @@ static int bmp_decode_frame(AVCodecContext *avctx,
         return AVERROR_INVALIDDATA;
     }
 
-    fsize = bytestream_get_le32(&buf);
-    if (buf_size < fsize) {
+    //fsize = bytestream_get_le32(&buf);
+    /*if (buf_size < fsize) {
         av_log(avctx, AV_LOG_ERROR, "not enough data (%d < %u), trying to decode anyway\n",
                buf_size, fsize);
         fsize = buf_size;
-    }
+    }*/
 
-    //    buf += 2; /* reserved1 */
-    //    buf += 2; /* reserved2 */
+    /*av_log(avctx, AV_LOG_INFO, "%u\n", ihsize);
 
-    hsize  = bytestream_get_le32(&buf); /* header size */
-    ihsize = bytestream_get_le32(&buf); // more header size
-    av_log(avctx, AV_LOG_INFO, "hsize %u\n", hsize);
-    av_log(avctx, AV_LOG_INFO, "ihsize%u\n", ihsize);
-
-
-    if (ihsize + 10LL > hsize) {
+    if (ihsize + 14LL > hsize) {
         av_log(avctx, AV_LOG_ERROR, "invalid header size %u\n", hsize);
         return AVERROR_INVALIDDATA;
     }
 
     /* sometimes file size is set to some headers size, set a real size in that case */
-    if (fsize == 14 || fsize == ihsize + 14)
+    /*if (fsize == 14 || fsize == ihsize + 14)
         fsize = buf_size - 2;
 
     if (fsize <= hsize) {
@@ -92,63 +87,15 @@ static int bmp_decode_frame(AVCodecContext *avctx,
                "Declared file size is less than header size (%u < %u)\n",
                fsize, hsize);
         return AVERROR_INVALIDDATA;
-    }
-
-    // TODO
-    width = bytestream_get_le32(&buf);
-    height = bytestream_get_le32(&buf);
-
-    n_bytes_image = bytestream_get_le32(&buf);
-
-
-    /*switch (ihsize) {
-    case  40: // windib
-    case  56: // windib v3
-    case  64: // OS/2 v2
-    case 108: // windib v4
-    case 124: // windib v5
-        width  = bytestream_get_le32(&buf);
-        height = bytestream_get_le32(&buf);
-        break;
-    case  12: // OS/2 v1
-        width  = bytestream_get_le16(&buf);
-        height = bytestream_get_le16(&buf);
-        break;
-    default:
-        avpriv_report_missing_feature(avctx, "Information header size %u",
-                                      ihsize);
-        return AVERROR_PATCHWELCOME;
-    }*/
-
-    /* planes */
-    /*if (bytestream_get_le16(&buf) != 1) {
-        av_log(avctx, AV_LOG_ERROR, "invalid NICE header\n");
-        return AVERROR_INVALIDDATA;
-    }*/
-
-    depth = 24;
-    /*
-    if (ihsize >= 40)
-        comp = bytestream_get_le32(&buf);
-    else
-        comp = BMP_RGB;
-
-    if (comp != BMP_RGB && comp != BMP_BITFIELDS && comp != BMP_RLE4 &&
-        comp != BMP_RLE8) {
-        av_log(avctx, AV_LOG_ERROR, "BMP coding %d not supported\n", comp);
-        return AVERROR_INVALIDDATA;
-    }
-
-    if (comp == BMP_BITFIELDS) {
-        buf += 20;
-        rgb[0] = bytestream_get_le32(&buf);
-        rgb[1] = bytestream_get_le32(&buf);
-        rgb[2] = bytestream_get_le32(&buf);
-        if (ihsize > 40)
-        alpha = bytestream_get_le32(&buf);
 	}*/
 
-    // error check
+    // Get width, height, and number of bytes in the image
+    width = bytestream_get_le32(&buf);
+    height = bytestream_get_le32(&buf);
+    n_bytes_image = bytestream_get_le32(&buf);
+
+    depth = 8;
+
     ret = ff_set_dimensions(avctx, width, height > 0 ? height : -(unsigned)height);
     if (ret < 0) {
         av_log(avctx, AV_LOG_ERROR, "Failed to set dimensions %d %d\n", width, height);
@@ -157,63 +104,51 @@ static int bmp_decode_frame(AVCodecContext *avctx,
 
     avctx->pix_fmt = AV_PIX_FMT_BGR24;
 
-    /*    switch (depth) {
-    case 24:
-        avctx->pix_fmt = AV_PIX_FMT_BGR24;
-        break;
-    default:
-        av_log(avctx, AV_LOG_ERROR, "depth %u not supported\n", depth);
-        return AVERROR_INVALIDDATA;
-    }
-
-    if (avctx->pix_fmt == AV_PIX_FMT_NONE) {
-        av_log(avctx, AV_LOG_ERROR, "unsupported pixel format\n");
-        return AVERROR_INVALIDDATA;
-	}*/
-
     if ((ret = ff_get_buffer(avctx, p, 0)) < 0)
         return ret;
 
     p->pict_type = AV_PICTURE_TYPE_I;
     p->key_frame = 1;
 
-    buf   = buf0 + hsize;
-    dsize = buf_size - hsize;
+    //buf   = buf0 + hsize;
+    //dsize = buf_size - hsize;
+    dsize = buf_size;
 
+    /* Line size in file multiple of 4*/
+    //n = ((avctx->width * depth + 31) / 8) & ~3;
+    n = 2;
 
-    // error check
-    /* Line size in file multiple of 4 */
-    // n = ((avctx->width * depth + 31) / 8) & ~3;
-    //
-    // if (n * avctx->height > dsize /*&& comp != BMP_RLE4 && comp != BMP_RLE8*/) {
-    //     n = (avctx->width * depth + 7) / 8;
-    //     if (n * avctx->height > dsize) {
-    //         av_log(avctx, AV_LOG_ERROR, "not enough data (%d < %d)\n",
-    //                dsize, n * avctx->height);
-    //         return AVERROR_INVALIDDATA;
-    //     }
-    //     av_log(avctx, AV_LOG_ERROR, "data size too small, assuming missing line alignment\n");
-    // }
-
-    // RLE may skip decoding some picture areas, so blank picture before decoding
-    /*    if (comp == BMP_RLE4 || comp == BMP_RLE8)
-	  memset(p->data[0], 0, avctx->height * p->linesize[0]);*/
+    if (n * avctx->height > dsize) {
+        n = (avctx->width * depth + 7) / 8;
+        if (n * avctx->height > dsize) {
+            av_log(avctx, AV_LOG_ERROR, "not enough data (%d < %d)\n",
+                   dsize, n * avctx->height);
+            return AVERROR_INVALIDDATA;
+        }
+        av_log(avctx, AV_LOG_ERROR, "data size too small, assuming missing line alignment\n");
+    }
 
     if (height > 0) {
-        ptr      = p->data[0] + (avctx->height - 1) * p->linesize[0];
+      //ptr      = p->data[0] + (avctx->height - 1) * p->linesize[0];
+	ptr = p->data[0];
         linesize = -p->linesize[0];
     } else {
         ptr      = p->data[0];
         linesize = p->linesize[0];
     }
-
-
-
-
-
-
-
-
+    
+    // Translation here
+    for (i = 0; i < avctx->height; i++) {
+      int y;
+      for(y = 0; y < avctx->width; y++) {
+        int t = bytestream_get_le32(&buf);
+	int bgr[3] = { ct[t].b, ct[t].g, ct[t].r };
+      }
+      
+      buf += n;
+      ptr += linesize;
+    }
+    // Translation here
 
     /*
     if (avctx->pix_fmt == AV_PIX_FMT_PAL8) {
@@ -283,11 +218,6 @@ static int bmp_decode_frame(AVCodecContext *avctx,
         case 8:
         case 24:
         case 32:
-            for (i = 0; i < avctx->height; i++) {
-                memcpy(ptr, buf, n);
-                buf += n;
-                ptr += linesize;
-            }
             break;
         case 4:
             for (i = 0; i < avctx->height; i++) {
@@ -342,6 +272,6 @@ AVCodec ff_nice_decoder = {
     .long_name      = NULL_IF_CONFIG_SMALL("Nice"),
     .type           = AVMEDIA_TYPE_VIDEO,
     .id             = AV_CODEC_ID_NICE,
-    .decode         = bmp_decode_frame,
+    .decode         = nice_decode_frame,
     .capabilities   = AV_CODEC_CAP_DR1,
 };
