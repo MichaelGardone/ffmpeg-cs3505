@@ -128,8 +128,7 @@ static int nice_decode_frame(AVCodecContext *avctx,
     }
 
     if (height > 0) {
-      ptr      = p->data[0] + (avctx->height - 1) * p->linesize[0];
-      //ptr = p->data[0];
+        ptr      = p->data[0] + (avctx->height - 1) * p->linesize[0];
         linesize = -p->linesize[0];
     } else {
         ptr      = p->data[0];
@@ -138,29 +137,32 @@ static int nice_decode_frame(AVCodecContext *avctx,
     
     // Translation here
     for (i = 0; i < avctx->height; i++) {
-      memcpy(ptr, buf, n);
+      //memcpy(ptr, buf, n);
       
       int y;
       int t_storage[3];
       for(y = 0; y < avctx->width; y++) {
         // OLD WAY
-	t_storage[0] = ptr[y];
+	/*t_storage[0] = ptr[y];
 	if(y+1 < avctx->width)
 	  t_storage[1] = ptr[y+1];
 	if(y+2 < avctx->width)
 	  t_storage[2] = ptr[y+2];
 	
 	int r = ct[y].r, g = ct[y].g, b = ct[y].b;
-	//memset(ptr[y], b, 4);
-	//memset(ptr[y+1], g, 4);
-	//memset(ptr[y+2], r, 4);
+	memset(ptr[y], b, 4);
+	memset(ptr[y+1], g, 4);
+	memset(ptr[y+2], r, 4);*/
 
 	// NEW WAY
-	/*int t = bytestream_get_le32(&buf);
-	int bgr[3] = { ct[t].b, ct[t].g, ct[t].r };
-	av_log(avctx, AV_LOG_INFO, "!*@(*#*!(*@#(!@*#(!*@#(!#*@(*@#!(BGR value at (%d, %d): (%d, %d, %d)\n");
-
-        av_log(avctx, AV_LOG_INFO, "BGR value at (%d, %d): (%d, %d, %d)\n", y, i, bgr[0], bgr[1], bgr[2]);*/
+	uint8_t t = bytestream_get_byte(&buf);
+	uint8_t bgr[3];
+	bgr[2] = (uint8_t)ct[t].r;
+	bgr[1] = (uint8_t)ct[t].g;
+	bgr[0] = (uint8_t)ct[t].b;
+        uint8_t *buf2;
+	
+	memcpy(ptr, 
       }
       
       buf += n;
