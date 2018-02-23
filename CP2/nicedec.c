@@ -18,125 +18,157 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include <inttypes.h>
-
+#include "libavutil/imgutils.h"
+#include "libavutil/avassert.h"
 #include "avcodec.h"
 #include "bytestream.h"
 #include "nice.h"
 #include "internal.h"
-#include "msrledec.h"
+
+static ColorTable ct[256];
+
+
 
 /**
- * nice_decode_frame returns the size of the buffer and will set the AVCodecContext's data up correctly for a .nice file.
- * Method will return pixels in the BGR24 format. Method expects a .nice file with the correctly labeled header and will
- * return an error if such a thing is incorrect. As well, the buffer needs to have enough space to convert the .nice to a
- * computer-readable form.
- */
-static int nice_decode_frame(AVCodecContext *avctx,
-                            void *data, int *got_frame,
-                            AVPacket *avpkt)
-{
-  // Color table array
-  ColorTable ct[256];
-  // Populate ct with all 256 colors
-  populate_ColorTable(&ct);
-  // Our buffer for the data
-  const uint8_t *buf = avpkt->data;
-  // The size of the buffer
-  int buf_size       = avpkt->size;
-  // Where the pixel data goes
-  AVFrame *p         = data;
-  // Dimensions of the picture
-  int width, height;
-  // Bit/Channel depth
-  unsigned int depth;
-  // x, y, rgb_cnt -> used in three for loops below
-  // n -> Linesize
-  // ret -> Used to help initialize avctx width and height
-  int x, y, rgb_cnt, n, ret;
-  
-  // Check if buffer size is big enough
-  if (buf_size < 14) {
-    av_log(avctx, AV_LOG_ERROR, "buf size too small (%d)\n", buf_size);
-    return AVERROR_INVALIDDATA;
-  }
-
-  // Check to make sure the first four bytes are correctly in the NICE format
-  if (bytestream_get_byte(&buf) != 'N' || bytestream_get_byte(&buf) != 'I' ||
-       bytestream_get_byte(&buf) != 'C' || bytestream_get_byte(&buf) != 'E') {
-    av_log(avctx, AV_LOG_ERROR, "bad magic number\n");
-    return AVERROR_INVALIDDATA;
-  }
-
-  // Get width and height
-  width = bytestream_get_le32(&buf);
-  height = bytestream_get_le32(&buf);
-
-  // 8 because 8 bits per pixel (or 1 byte)
-  depth = 8;
-
-  // Set the avctx width and height dimensions using FFMPEG
-  ret = ff_set_dimensions(avctx, width, height > 0 ? height : -(unsigned)height);
-  if (ret < 0) {
-    av_log(avctx, AV_LOG_ERROR, "Failed to set dimensions %d %d\n", width, height);
-    return AVERROR_INVALIDDATA;
-  }
-  
-  // The video type we are returning
-  avctx->pix_fmt = AV_PIX_FMT_BGR24;
-
-  // Check to make sure that the buffer isn't having issues/out of bounds
-  if ((ret = ff_get_buffer(avctx, p, 0)) < 0)
-     return ret;
-
-  // Putting right settings on pixel information
-  p->pict_type = AV_PICTURE_TYPE_I;
-  p->key_frame = 1;
-
-  /* Line size in file multiple of 4*/
-  n = ((avctx->width * depth + 31) / 8) & ~3;
-
-  if (n * avctx->height > buf_size) {
-    n = (avctx->width * depth + 7) / 8;
-    if (n * avctx->height > buf_size) {
-        av_log(avctx, AV_LOG_ERROR, "not enough data (%d < %d)\n", buf_size, n * avctx->height);
-        return AVERROR_INVALIDDATA;
+ * Initialize the color table and set the pix format to BGR 24
+ **/
+static av_cold int nice_encode_init(AVCodecContext *avctx){
+    populate_ColorTable(&ct);
+    
+    switch (avctx->pix_fmt) {
+        case AV_PIX_FMT_BGR24:
+            avctx->bits_per_coded_sample = 24;
+            break;
+        default:
+            av_log(avctx, AV_LOG_INFO, "unsupported pixel format\n");
+            return AVERROR(EINVAL);
     }
-    av_log(avctx, AV_LOG_ERROR, "data size too small, assuming missing line alignment\n");
-  }
-
-  // Translation here
-  // Reverse height and width, the image mirrors and flips
-  for (y = 0; y < avctx->height; y++) {
-    for(x = 0; x < avctx->width; x++) {
-      // Get the next byte in the stream
-      int8_t t = bytestream_get_byte(&buf);
-      // Get the RGB value in the color table but formatted as BGR
-      int bgr[3];
-      bgr[2] = ct[t].r;
-      bgr[1] = ct[t].g;
-      bgr[0] = ct[t].b;
-      
-      // Put the BGR value in the picture data
-      for(rgb_cnt = 0; rgb_cnt < 3; rgb_cnt++) {
-	p->data[0][y*p->linesize[0]+x*3+rgb_cnt] = bgr[rgb_cnt];
-      }
-    }
-  }
-  // Translation here
-
-  // Success!
-  *got_frame = 1;
-
-  // Return the size of our buffer for the next encoder/ffplay
-  return buf_size;
+    return 0;
 }
 
-AVCodec ff_nice_decoder = {
+/**
+ * Nice encode frame encodes the image file in a nice format. NICE format contains header: "NICE", width, and height.
+ **/
+static int nice_encode_frame(AVCodecContext *avctx, AVPacket *pkt, const AVFrame *pict, int *got_packet)
+{
+    const AVFrame * const p = pict;
+    // hsize - header size
+    // n_bytes - size of file/number of bytes in file
+    // n_bytes_image - size of pixel array
+    // i - for loop
+    // n - second for loop, internal for loop
+    // ret - return value for error
+    int n_bytes_image, n_bytes_per_row, n_bytes, i, n, hsize, ret;
+    const uint32_t *pal = NULL;
+    // pad_bytes_per_row - padding between rows
+    // pal_entires - ?????
+    int pad_bytes_per_row=0, pal_entries = 0;
+    // bit count - color channel
+    int bit_count = avctx->bits_per_coded_sample;
+    // *buf - buffer pointer
+    // *ptr - points to the end of the file
+    uint8_t *ptr, *end_ptr, *buf;
+    
+    // GUARD AGAINST DEPRECATED CODE
+#if FF_API_CODED_FRAME
+    FF_DISABLE_DEPRECATION_WARNINGS
+    avctx->coded_frame->pict_type = AV_PICTURE_TYPE_I;
+    avctx->coded_frame->key_frame = 1;
+    FF_ENABLE_DEPRECATION_WARNINGS
+#endif
+    // GUARD AGAINST DEPRECATED CODE
+    
+    if (pal && !pal_entries)pal_entries = 1 << bit_count;
+    
+    n_bytes_per_row = ((int64_t)avctx->width * (int64_t)bit_count + 7LL ) >> 3LL;
+    
+    n_bytes_image = avctx->height * (n_bytes_per_row + pad_bytes_per_row);
+    n_bytes_image /=3;
+    n_bytes_image += 2*avctx->height;
+    
+    // Size of the NICE Header and NICE Info Header(IH)
+#define SIZE_BITMAPFILEHEADER 4
+#define SIZE_BITMAPINFOHEADER 8
+    hsize = SIZE_BITMAPFILEHEADER + SIZE_BITMAPINFOHEADER + (pal_entries << 2);
+    n_bytes = n_bytes_image + hsize;
+    
+    // Checking to see if memory can be alloacted to a packet for putting in file
+    if ((ret = ff_alloc_packet2(avctx, pkt, n_bytes, 0)) < 0)
+        return ret;
+    
+    buf = pkt->data;
+    
+    // == INSERT NICE HEADER == //
+    bytestream_put_byte(&buf, 'N');
+    bytestream_put_byte(&buf, 'I');
+    bytestream_put_byte(&buf, 'C');
+    bytestream_put_byte(&buf, 'E');
+    // == INSERT NICE HEADER == //
+    
+    // == INSERT WIDTH AND HEIGHT == //
+    bytestream_put_le32(&buf, avctx->width);
+    bytestream_put_le32(&buf, avctx->height);
+    // == INSERT WIDTH AND HEIGHT == //
+    
+    
+    // guard
+    for (i = 0; i < pal_entries; i++)
+        bytestream_put_le32(&buf, pal[i] & 0xFFFFFF);
+    
+    end_ptr = p->data[0] + (avctx->height - 1) * p->linesize[0];
+    ptr = p->data[0];
+    
+    // All encoding/compression goes here
+    // Loop through height
+    
+    
+    for(i = 0; i < avctx->height; i++) {
+        int colors[3]; // color[0] = blue, color[1] = green, color[2] = red
+        for (n = 0; n < avctx->width*3; n++) {
+            colors[n%3] = (ptr[n]);
+            if(n%3 == 2) {
+                int p;
+                
+                int colorIndex; // index nunmber that the closest color is stroed in the color table.
+                int smallestSoFar = 1000; // initialize it to 1000 because it is never bigger than 1000
+                for(p=0; p < 255; p++) {
+                    int rDiff = abs(ct[p].r - colors[2]);
+                    int gDiff = abs(ct[p].g - colors[1]);
+                    int bDiff = abs(ct[p].b - colors[0]);
+                    int sum = rDiff+gDiff+bDiff;
+                    
+                    // choose the closest color from the color table
+                    if(smallestSoFar>sum)
+                    {
+                        smallestSoFar = sum;
+                        colorIndex = p;
+                    }
+                }
+                
+                // put the index nunmber to the buffer (1 byte each)
+                bytestream_put_byte(&buf, colorIndex);
+            }
+        }
+        
+        
+        if(end_ptr != ptr)
+            ptr += p->linesize[0]; // increment the pointer but make sure not to point outside
+    }
+    
+    pkt->flags |= AV_PKT_FLAG_KEY;
+    *got_packet = 1;
+    return 0;
+}
+
+AVCodec ff_nice_encoder = {
     .name           = "nice",
-    .long_name      = NULL_IF_CONFIG_SMALL("Nice"),
+    .long_name      = NULL_IF_CONFIG_SMALL("BMP (Windows and OS/2 bitmap)"),
     .type           = AVMEDIA_TYPE_VIDEO,
     .id             = AV_CODEC_ID_NICE,
-    .decode         = nice_decode_frame,
-    .capabilities   = AV_CODEC_CAP_DR1,
+    .init           = nice_encode_init,
+    .encode2        = nice_encode_frame,
+    .pix_fmts       = (const enum AVPixelFormat[]){
+        AV_PIX_FMT_BGR24,
+        AV_PIX_FMT_NONE
+    },
 };
