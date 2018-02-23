@@ -74,9 +74,11 @@ static int bmp_decode_frame(AVCodecContext *avctx,
 
     hsize  = bytestream_get_le32(&buf); /* header size */
     ihsize = bytestream_get_le32(&buf); // more header size
-    av_log(avctx, AV_LOG_INFO, "%u\n", ihsize);
+    av_log(avctx, AV_LOG_INFO, "hsize %u\n", hsize);
+    av_log(avctx, AV_LOG_INFO, "ihsize%u\n", ihsize);
 
-    if (ihsize + 14LL > hsize) {
+
+    if (ihsize + 10LL > hsize) {
         av_log(avctx, AV_LOG_ERROR, "invalid header size %u\n", hsize);
         return AVERROR_INVALIDDATA;
     }
@@ -124,7 +126,7 @@ static int bmp_decode_frame(AVCodecContext *avctx,
         return AVERROR_INVALIDDATA;
     }*/
 
-    depth = 8;
+    depth = 24;
     /*
     if (ihsize >= 40)
         comp = bytestream_get_le32(&buf);
@@ -146,6 +148,7 @@ static int bmp_decode_frame(AVCodecContext *avctx,
         alpha = bytestream_get_le32(&buf);
 	}*/
 
+    // error check
     ret = ff_set_dimensions(avctx, width, height > 0 ? height : -(unsigned)height);
     if (ret < 0) {
         av_log(avctx, AV_LOG_ERROR, "Failed to set dimensions %d %d\n", width, height);
@@ -177,18 +180,20 @@ static int bmp_decode_frame(AVCodecContext *avctx,
     buf   = buf0 + hsize;
     dsize = buf_size - hsize;
 
-    /* Line size in file multiple of 4 */
-    n = ((avctx->width * depth + 31) / 8) & ~3;
 
-    if (n * avctx->height > dsize /*&& comp != BMP_RLE4 && comp != BMP_RLE8*/) {
-        n = (avctx->width * depth + 7) / 8;
-        if (n * avctx->height > dsize) {
-            av_log(avctx, AV_LOG_ERROR, "not enough data (%d < %d)\n",
-                   dsize, n * avctx->height);
-            return AVERROR_INVALIDDATA;
-        }
-        av_log(avctx, AV_LOG_ERROR, "data size too small, assuming missing line alignment\n");
-    }
+    // error check
+    /* Line size in file multiple of 4 */
+    // n = ((avctx->width * depth + 31) / 8) & ~3;
+    //
+    // if (n * avctx->height > dsize /*&& comp != BMP_RLE4 && comp != BMP_RLE8*/) {
+    //     n = (avctx->width * depth + 7) / 8;
+    //     if (n * avctx->height > dsize) {
+    //         av_log(avctx, AV_LOG_ERROR, "not enough data (%d < %d)\n",
+    //                dsize, n * avctx->height);
+    //         return AVERROR_INVALIDDATA;
+    //     }
+    //     av_log(avctx, AV_LOG_ERROR, "data size too small, assuming missing line alignment\n");
+    // }
 
     // RLE may skip decoding some picture areas, so blank picture before decoding
     /*    if (comp == BMP_RLE4 || comp == BMP_RLE8)
@@ -201,6 +206,14 @@ static int bmp_decode_frame(AVCodecContext *avctx,
         ptr      = p->data[0];
         linesize = p->linesize[0];
     }
+
+
+
+
+
+
+
+
 
     /*
     if (avctx->pix_fmt == AV_PIX_FMT_PAL8) {
