@@ -46,7 +46,7 @@ static int bmp_decode_frame(AVCodecContext *avctx,
     int dsize;
     const uint8_t *buf0 = buf;
     GetByteContext gb;
-    
+
     if (buf_size < 14) {
         av_log(avctx, AV_LOG_ERROR, "buf size too small (%d)\n", buf_size);
         return AVERROR_INVALIDDATA;
@@ -54,8 +54,8 @@ static int bmp_decode_frame(AVCodecContext *avctx,
 
     if (bytestream_get_byte(&buf) != 'N' ||
         bytestream_get_byte(&buf) != 'I' ||
-	bytestream_get_byte(&buf) != 'C' ||
-	bytestream_get_byte(&buf) != 'E') {
+	      bytestream_get_byte(&buf) != 'C' ||
+	      bytestream_get_byte(&buf) != 'E') {
         av_log(avctx, AV_LOG_ERROR, "bad magic number\n");
         return AVERROR_INVALIDDATA;
     }
@@ -196,7 +196,7 @@ static int bmp_decode_frame(AVCodecContext *avctx,
         ptr      = p->data[0];
         linesize = p->linesize[0];
     }
-    
+
     /*
     if (avctx->pix_fmt == AV_PIX_FMT_PAL8) {
         int colors = 1 << depth;

@@ -79,11 +79,14 @@ static int nice_encode_frame(AVCodecContext *avctx, AVPacket *pkt, const AVFrame
  //n_bytes_per_row = (int64_t)avctx->width;
  //pad_bytes_per_row = (4 - n_bytes_per_row) & 3;
      n_bytes_image = avctx->height * (n_bytes_per_row + pad_bytes_per_row);
+     n_bytes_image /=3;
+     n_bytes_image += 2*avctx->height + 10;
 
      // Size of the NICE Header and NICE Info Header(IH)
- #define SIZE_BITMAPFILEHEADER 4
- #define SIZE_BITMAPINFOHEADER 24
+ #define SIZE_BITMAPFILEHEADER 12
+ #define SIZE_BITMAPINFOHEADER 16
     hsize = SIZE_BITMAPFILEHEADER + SIZE_BITMAPINFOHEADER + (pal_entries << 2);
+    hsize = 24;
     n_bytes = n_bytes_image + hsize;
 
     // Checking to see if memory can be alloacted to a packet for putting in file
@@ -105,7 +108,7 @@ static int nice_encode_frame(AVCodecContext *avctx, AVPacket *pkt, const AVFrame
     bytestream_put_le32(&buf, hsize);
     // == INSERT HEADER SIZE == //
     // == INSERT IH SIZE == //
-    bytestream_put_le32(&buf, SIZE_BITMAPINFOHEADER);
+    //bytestream_put_le32(&buf, SIZE_BITMAPINFOHEADER);
     // == INSERT IH SIZE == //
     // == INSERT WIDTH AND HEIGHT == //
     bytestream_put_le32(&buf, avctx->width);
@@ -121,15 +124,16 @@ static int nice_encode_frame(AVCodecContext *avctx, AVPacket *pkt, const AVFrame
     // BMP files are bottom-to-top so we start from the end...
     end_ptr = p->data[0] + (avctx->height - 1) * p->linesize[0];
     ptr = p->data[0];
-    buf = pkt->data + hsize;
+    //buf = pkt->data + hsize;
 
     // All encoding/compression goes here
     // Loop through height
+
     for(i = 0; i < avctx->height; i++) {
       int colors[3];
       for (n = 0; n < avctx->width*3; n++) {
 	//colors[n%3] = rgb_clamp(ptr[n]);
-  colors[n%3] = (ptr[n]); // color[0] = blue, color[1] = green, color[2] = red
+        colors[n%3] = (ptr[n]); // color[0] = blue, color[1] = green, color[2] = red
 	if(n%3 == 2) {
 	  int p;
 
@@ -155,14 +159,18 @@ static int nice_encode_frame(AVCodecContext *avctx, AVPacket *pkt, const AVFrame
 	  // }
 
 	  //av_log(avctx, AV_LOG_INFO, "val at (%u,%u): %u\n", i, n, p);
-    bytestream_put_byte(&buf, colorIndex);
+	  //av_log(avctx, AV_LOG_INFO, "valkasat %u\n", colorIndex);
+	  bytestream_put_byte(&buf, colorIndex);
 	}
       }
+
+
 	// send to file
-        buf += 2;
+  // memset(buf, 0, 2);
+	buf += 2;
         //buf += n_bytes_per_row;
         //memset(buf, 0, 2);
-        //buf += pad_bytes_per_row;
+        // buf += pad_bytes_per_row;
 	if(end_ptr == ptr)
 	  ptr += p->linesize[0];
     }
