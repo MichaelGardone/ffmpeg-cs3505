@@ -86,7 +86,6 @@ static int nice_encode_frame(AVCodecContext *avctx, AVPacket *pkt, const AVFrame
  #define SIZE_BITMAPFILEHEADER 12
  #define SIZE_BITMAPINFOHEADER 16
     hsize = SIZE_BITMAPFILEHEADER + SIZE_BITMAPINFOHEADER + (pal_entries << 2);
-    hsize = 24;
     n_bytes = n_bytes_image + hsize;
 
     // Checking to see if memory can be alloacted to a packet for putting in file
@@ -108,7 +107,7 @@ static int nice_encode_frame(AVCodecContext *avctx, AVPacket *pkt, const AVFrame
     bytestream_put_le32(&buf, hsize);
     // == INSERT HEADER SIZE == //
     // == INSERT IH SIZE == //
-    //bytestream_put_le32(&buf, SIZE_BITMAPINFOHEADER);
+    bytestream_put_le32(&buf, SIZE_BITMAPINFOHEADER);
     // == INSERT IH SIZE == //
     // == INSERT WIDTH AND HEIGHT == //
     bytestream_put_le32(&buf, avctx->width);
@@ -129,6 +128,8 @@ static int nice_encode_frame(AVCodecContext *avctx, AVPacket *pkt, const AVFrame
     // All encoding/compression goes here
     // Loop through height
 
+
+    int x = 0;
     for(i = 0; i < avctx->height; i++) {
       int colors[3];
       for (n = 0; n < avctx->width*3; n++) {
@@ -158,6 +159,11 @@ static int nice_encode_frame(AVCodecContext *avctx, AVPacket *pkt, const AVFrame
 	  //     break;
 	  // }
 
+    if(x < 15)
+    {
+      av_log(avctx, AV_LOG_INFO, "colorIndex %u\n", colorIndex);
+      x++;
+    }
 	  //av_log(avctx, AV_LOG_INFO, "val at (%u,%u): %u\n", i, n, p);
 	  //av_log(avctx, AV_LOG_INFO, "valkasat %u\n", colorIndex);
 	  bytestream_put_byte(&buf, colorIndex);
