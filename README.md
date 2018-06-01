@@ -1,6 +1,6 @@
 # ffmpeg-cs3505
 
-Created for Dr. Peter Jenson's CS 3505. Project contians two benchmarks: finding methods called by FFMPEG to convert to image types and implement a decoder and encoder in C to attach to FFMPEG.
+Created for Dr. Peter Jenson's 2018 Spring CS 3505 ("Software Practices II") class. Project contians two benchmarks: finding methods called by FFMPEG to convert to image types and implement a decoder and encoder in C to attach to FFMPEG.
 
 ## Benchmark 1
 
